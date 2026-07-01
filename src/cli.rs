@@ -1,4 +1,4 @@
-use crate::config::{Config, LLMProvider};
+use crate::config::{Config, LLMConfig, LLMProvider};
 use crate::i18n::TargetLanguage;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -95,6 +95,10 @@ pub struct Args {
     #[arg(long)]
     pub no_cache: bool,
 
+    /// Disable mermaid diagram auto-fixing (requires Chromium when enabled)
+    #[arg(long)]
+    pub no_mermaid_fixer: bool,
+
     /// Force regeneration (clear cache)
     #[arg(long)]
     pub force_regenerate: bool,
@@ -177,10 +181,11 @@ impl Args {
         }
         if let Some(llm_api_base_url) = self.llm_api_base_url {
             config.llm.api_base_url = llm_api_base_url;
-        } else {
-            if config.llm.provider == LLMProvider::Ollama {
-                config.llm.api_base_url = "http://localhost:11434".to_owned();
-            }
+        } else if config.llm.provider == LLMProvider::Ollama && config.llm.api_base_url.is_empty() {
+            config.llm.api_base_url = "http://localhost:11434".to_owned();
+        }
+        if config.llm.provider == LLMProvider::Ollama {
+            config.llm.api_base_url = LLMConfig::ollama_native_base_url(&config.llm.api_base_url);
         }
         if let Some(llm_api_key) = self.llm_api_key {
             config.llm.api_key = llm_api_key;
@@ -222,6 +227,11 @@ impl Args {
             config.cache.enabled = false;
         }
 
+        // Mermaid fixer configuration override
+        if self.no_mermaid_fixer {
+            config.mermaid_fixer.enabled = false;
+        }
+
         // Boundary analysis configuration overrides
         if let Some(code_limit) = self.boundary_code_limit {
             config.boundary_analysis.code_insights_limit = code_limit;
@@ -235,5 +245,19 @@ impl Args {
 
 
         config
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn test_no_mermaid_fixer_flag_disables_fixer() {
+        let args = Args::parse_from(["deepwiki-rs", "--no-mermaid-fixer"]);
+        let config = args.to_config();
+
+        assert!(!config.mermaid_fixer.enabled);
     }
 }

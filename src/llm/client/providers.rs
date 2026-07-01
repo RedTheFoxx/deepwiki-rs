@@ -95,7 +95,7 @@ impl ProviderClient {
             LLMProvider::Ollama => {
                 let client = rig::providers::ollama::Client::builder()
                     .api_key(rig::client::Nothing)
-                    .base_url(&config.api_base_url)
+                    .base_url(&config.normalized_api_base_url())
                     .build()?;
                 Ok(ProviderClient::Ollama(client))
             }
@@ -494,7 +494,7 @@ impl ProviderClient {
                 let wrapper = OllamaExtractorWrapper::with_config(
                     agent,
                     config.retry_attempts,
-                    config.api_base_url.clone(),
+                    config.normalized_api_base_url(),
                     model.to_string(),
                 );
 
