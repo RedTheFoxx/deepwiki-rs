@@ -477,6 +477,34 @@ impl TargetLanguage {
         }
     }
 
+    /// Chromium unavailable for mermaid fixing
+    pub fn msg_mermaid_chromium_unavailable(&self) -> &'static str {
+        match self {
+            TargetLanguage::Chinese => "⚠️ 未检测到 Chromium/Chrome，已跳过 mermaid 图表修复",
+            TargetLanguage::English => {
+                "⚠️ Chromium/Chrome not detected, skipping mermaid diagram fixing"
+            }
+            TargetLanguage::Japanese => {
+                "⚠️ Chromium/Chrome が検出されませんでした。mermaid ダイアグラム修復をスキップします"
+            }
+            TargetLanguage::Korean => {
+                "⚠️ Chromium/Chrome을 찾을 수 없어 mermaid 다이어그램 복구를 건너뜁니다"
+            }
+            TargetLanguage::German => {
+                "⚠️ Chromium/Chrome nicht gefunden, Mermaid-Diagrammreparatur wird übersprungen"
+            }
+            TargetLanguage::French => {
+                "⚠️ Chromium/Chrome introuvable, correction des diagrammes mermaid ignorée"
+            }
+            TargetLanguage::Russian => {
+                "⚠️ Chromium/Chrome не обнаружен, восстановление диаграмм mermaid пропущено"
+            }
+            TargetLanguage::Vietnamese => {
+                "⚠️ Không phát hiện Chromium/Chrome, bỏ qua sửa chữa sơ đồ mermaid"
+            }
+        }
+    }
+
     /// Summary reasoning failed
     pub fn msg_summary_reasoning_failed(&self) -> &'static str {
         match self {

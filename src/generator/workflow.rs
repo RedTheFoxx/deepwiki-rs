@@ -47,9 +47,12 @@ pub async fn launch(c: &Config) -> Result<()> {
 
     let config = c.clone();
 
-    // Check mermaid-fixer availability at startup
-    if !crate::generator::outlet::MermaidFixer::is_available().await {
-        anyhow::bail!("mermaid-fixer is not installed. Run 'cargo install mermaid-fixer' to install it");
+    if config.mermaid_fixer.enabled {
+        let chromium_detected = crate::generator::outlet::MermaidFixer::chromium_available();
+        println!(
+            "ℹ️  Mermaid fixing enabled (Chromium detected: {})",
+            if chromium_detected { "yes" } else { "no" }
+        );
     }
 
     let llm_client = LLMClient::new(config.clone())?;

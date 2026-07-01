@@ -135,6 +135,10 @@ pub struct Config {
     /// Boundary analysis configuration
     #[serde(default)]
     pub boundary_analysis: BoundaryAnalysisConfig,
+
+    /// Mermaid diagram auto-fixing configuration
+    #[serde(default)]
+    pub mermaid_fixer: MermaidFixerConfig,
 }
 
 /// LLM model configuration
@@ -233,6 +237,46 @@ fn default_code_insights_limit() -> usize {
 
 fn default_files_threshold() -> Option<usize> {
     Some(100)  // Reduced threshold for better performance
+}
+
+/// Mermaid diagram auto-fixing configuration
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct MermaidFixerConfig {
+    /// Whether to auto-fix invalid mermaid diagrams after documentation output
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    /// Detect invalid diagrams without applying fixes
+    #[serde(default)]
+    pub dry_run: bool,
+
+    /// Enable verbose logging during mermaid fixing
+    #[serde(default)]
+    pub verbose: bool,
+
+    /// LLM model override for mermaid fixing (defaults to llm.model_powerful)
+    #[serde(default)]
+    pub model: Option<String>,
+
+    /// Mermaid validation timeout in seconds
+    #[serde(default = "default_mermaid_timeout")]
+    pub timeout_seconds: u64,
+}
+
+fn default_mermaid_timeout() -> u64 {
+    30
+}
+
+impl Default for MermaidFixerConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            dry_run: false,
+            verbose: false,
+            model: None,
+            timeout_seconds: default_mermaid_timeout(),
+        }
+    }
 }
 
 /// Knowledge configuration for external documentation sources
@@ -690,6 +734,7 @@ impl Default for Config {
             cache: CacheConfig::default(),
             knowledge: KnowledgeConfig::default(),
             boundary_analysis: BoundaryAnalysisConfig::default(),
+            mermaid_fixer: MermaidFixerConfig::default(),
         }
     }
 }
@@ -711,6 +756,45 @@ impl Default for LLMConfig {
             max_parallels: 3,
             max_turns: 100,
             tool_concurrency: 4,
+        }
+    }
+}
+
+impl LLMConfig {
+    /// Ollama native API root used by rig (`/api/chat`, `/api/generate`).
+    pub fn ollama_native_base_url(url: &str) -> String {
+        let trimmed = url.trim_end_matches('/');
+        trimmed
+            .strip_suffix("/v1")
+            .map(|base| base.trim_end_matches('/').to_string())
+            .unwrap_or_else(|| trimmed.to_string())
+    }
+
+    /// OpenAI-compatible API root used by `/chat/completions` clients.
+    pub fn openai_compatible_base_url(url: &str) -> String {
+        let trimmed = url.trim_end_matches('/');
+        if trimmed.ends_with("/v1") {
+            trimmed.to_string()
+        } else {
+            format!("{trimmed}/v1")
+        }
+    }
+
+    /// Provider-aware base URL for rig and native Ollama HTTP calls.
+    pub fn normalized_api_base_url(&self) -> String {
+        if self.provider == LLMProvider::Ollama {
+            Self::ollama_native_base_url(&self.api_base_url)
+        } else {
+            self.api_base_url.trim_end_matches('/').to_string()
+        }
+    }
+
+    /// Provider-aware base URL for OpenAI-compatible HTTP calls (mermaid-fixer).
+    pub fn openai_compatible_api_base_url(&self) -> String {
+        if self.provider == LLMProvider::Ollama {
+            Self::openai_compatible_base_url(&self.api_base_url)
+        } else {
+            self.api_base_url.trim_end_matches('/').to_string()
         }
     }
 }
@@ -746,5 +830,48 @@ mod tests {
         assert_eq!(config.code_insights_limit, 25);
         assert_eq!(config.include_source_code, false);
         assert_eq!(config.only_directories_when_files_more_than, Some(100));
+    }
+
+    #[test]
+    fn test_mermaid_fixer_default_values() {
+        let config = MermaidFixerConfig::default();
+
+        assert!(config.enabled);
+        assert!(!config.dry_run);
+        assert!(!config.verbose);
+        assert!(config.model.is_none());
+        assert_eq!(config.timeout_seconds, 30);
+    }
+
+    #[test]
+    fn test_config_includes_mermaid_fixer_defaults() {
+        let config = Config::default();
+
+        assert!(config.mermaid_fixer.enabled);
+        assert_eq!(config.mermaid_fixer.timeout_seconds, 30);
+    }
+
+    #[test]
+    fn test_ollama_native_base_url_strips_v1_suffix() {
+        assert_eq!(
+            LLMConfig::ollama_native_base_url("http://localhost:11434/v1"),
+            "http://localhost:11434"
+        );
+        assert_eq!(
+            LLMConfig::ollama_native_base_url("http://localhost:11434"),
+            "http://localhost:11434"
+        );
+    }
+
+    #[test]
+    fn test_openai_compatible_base_url_adds_v1_suffix() {
+        assert_eq!(
+            LLMConfig::openai_compatible_base_url("http://localhost:11434"),
+            "http://localhost:11434/v1"
+        );
+        assert_eq!(
+            LLMConfig::openai_compatible_base_url("http://localhost:11434/v1"),
+            "http://localhost:11434/v1"
+        );
     }
 }

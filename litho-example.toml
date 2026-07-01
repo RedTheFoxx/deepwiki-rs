@@ -172,8 +172,8 @@ timeout_seconds = 300
 # Disable preset tools (advanced option)
 disable_preset_tools = false
 
-# Maximum number of parallel LLM requests (default: 3)
-# max_parallels = 3
+# Maximum number of parallel LLM requests (default: 1)
+max_parallels = 1
 
 # Tool call concurrency in ReAct loops (default: 4)
 # tool_concurrency = 4
@@ -220,6 +220,22 @@ disable_preset_tools = false
 # code_insights_limit = 25
 # include_source_code = false
 # only_directories_when_files_more_than = 100
+
+# ============================================================================
+# Mermaid Fixer Configuration
+# ============================================================================
+# Automatically validates and repairs invalid Mermaid diagrams in generated docs.
+# Requires Chromium/Chrome on the host when enabled. If Chromium is not found,
+# fixing is skipped gracefully and documentation generation continues.
+#
+# Disable from CLI: cargo run -- --no-mermaid-fixer
+#
+# [mermaid_fixer]
+# enabled = true
+# dry_run = false
+# verbose = false
+# model = "gpt-4o"          # optional override; defaults to llm.model_powerful
+# timeout_seconds = 30
 
 # ============================================================================
 # Knowledge Configuration (External Documentation Sources)
@@ -481,6 +497,9 @@ target_agents = []
 #   cargo run -- --skip-preprocessing
 #   cargo run -- --skip-research
 #   cargo run -- --skip-documentation
+#
+# Disable mermaid diagram auto-fixing:
+#   cargo run -- --no-mermaid-fixer
 #
 # Sync external knowledge sources:
 #   cargo run -- sync-knowledge
