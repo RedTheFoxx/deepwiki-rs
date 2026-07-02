@@ -1,0 +1,1 @@
+- FIX : Chrome instance for mermaid-fixer tends to stay open after process ends (on Windows, background tasks)
