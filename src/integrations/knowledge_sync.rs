@@ -31,7 +31,7 @@ impl KnowledgeSyncer {
 
     /// Sync all configured knowledge sources
     pub async fn sync_all(&self) -> Result<()> {
-        let target_lang = self.config.target_language.display_name();
+        let target_lang = self.config.target_language.english_label();
         println!("🔄 Syncing external knowledge sources (target language: {})...", target_lang);
 
         let mut synced_any = false;
