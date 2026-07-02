@@ -77,7 +77,7 @@ pub async fn launch(c: &Config) -> Result<()> {
                 eprintln!("⚠️  Warning: Failed to sync external knowledge: {}", e);
             }
         } else {
-            let lang = context.config.target_language.display_name();
+            let lang = context.config.target_language.english_label();
             println!("ℹ️  External knowledge cache ({}) is up to date", lang);
         }
     }

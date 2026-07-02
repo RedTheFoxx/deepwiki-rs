@@ -1,52 +1,90 @@
 use mermaid_rs::Mermaid;
+use std::thread;
 use std::time::Duration;
 
 pub struct MermaidValidator {
-    mermaid: Mermaid,
     #[allow(dead_code)]
     timeout: Duration,
 }
 
 impl MermaidValidator {
-
     pub fn with_config(timeout_seconds: Option<u64>) -> Result<Self, Box<dyn std::error::Error>> {
-        let mermaid = Mermaid::new()
-            .map_err(|e| format!("初始化Mermaid实例失败: {}", e))?;
-        
-        let timeout = Duration::from_secs(timeout_seconds.unwrap_or(30));
-        
+        if !crate::chromium_available() {
+            return Err("Chromium/Chrome executable not found".into());
+        }
+
         Ok(Self {
-            mermaid,
-            timeout,
+            timeout: Duration::from_secs(timeout_seconds.unwrap_or(30)),
         })
     }
 
-    /// 验证mermaid代码是否有效
+    /// Kept for API compatibility; each validation already uses an isolated Chrome session.
+    pub fn reset_connection(&self) {}
+
+    /// Validate whether mermaid code is valid
     pub fn validate(&self, mermaid_code: &str) -> Result<(), MermaidValidationError> {
         if mermaid_code.trim().is_empty() {
             return Err(MermaidValidationError::EmptyCode);
         }
 
-        // 预处理代码：移除可能的前后空白和注释
         let cleaned_code = self.preprocess_code(mermaid_code);
-
-        // 使用mermaid-rs进行验证
-        match self.mermaid.render(&cleaned_code) {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                // 分析错误类型
-                let error_message = e.to_string();
-                let error_type = self.classify_error(&error_message);
-                Err(MermaidValidationError::RenderError {
-                    message: error_message,
-                    error_type,
-                    original_code: mermaid_code.to_string(),
-                })
-            }
-        }
+        self.render_with_retry(&cleaned_code, mermaid_code, 3)
     }
 
-    /// 预处理mermaid代码
+    fn render_with_retry(
+        &self,
+        cleaned_code: &str,
+        original_code: &str,
+        max_attempts: usize,
+    ) -> Result<(), MermaidValidationError> {
+        let mut last_error = String::new();
+
+        for attempt in 0..max_attempts {
+            let mermaid = match Mermaid::new() {
+                Ok(mermaid) => mermaid,
+                Err(e) => {
+                    last_error = e.to_string();
+                    if attempt + 1 < max_attempts {
+                        thread::sleep(Duration::from_millis(500));
+                        continue;
+                    }
+                    return Err(MermaidValidationError::RenderError {
+                        message: last_error,
+                        error_type: MermaidErrorType::Unknown,
+                        original_code: original_code.to_string(),
+                    });
+                }
+            };
+
+            match mermaid.render(cleaned_code) {
+                Ok(_) => return Ok(()),
+                Err(e) => {
+                    last_error = e.to_string();
+                    if Self::is_connection_closed_error(&last_error) && attempt + 1 < max_attempts {
+                        thread::sleep(Duration::from_millis(500));
+                        continue;
+                    }
+                    return Err(MermaidValidationError::RenderError {
+                        message: last_error.clone(),
+                        error_type: self.classify_error(&last_error),
+                        original_code: original_code.to_string(),
+                    });
+                }
+            }
+        }
+
+        Err(MermaidValidationError::RenderError {
+            message: last_error,
+            error_type: MermaidErrorType::Unknown,
+            original_code: original_code.to_string(),
+        })
+    }
+
+    fn is_connection_closed_error(message: &str) -> bool {
+        message.contains("underlying connection is closed")
+    }
+
+    /// Preprocess mermaid code
     fn preprocess_code(&self, code: &str) -> String {
         code.lines()
             .map(|line| line.trim())
@@ -55,10 +93,10 @@ impl MermaidValidator {
             .join("\n")
     }
 
-    /// 分类错误类型
+    /// Classify error type
     fn classify_error(&self, error_message: &str) -> MermaidErrorType {
         let error_lower = error_message.to_lowercase();
-        
+
         if error_lower.contains("syntax") || error_lower.contains("parse") {
             MermaidErrorType::SyntaxError
         } else if error_lower.contains("node") || error_lower.contains("vertex") {
@@ -100,13 +138,60 @@ impl std::fmt::Display for MermaidValidationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             MermaidValidationError::EmptyCode => {
-                write!(f, "Mermaid代码为空")
+                write!(f, "Mermaid code is empty")
             }
             MermaidValidationError::RenderError { message, error_type, .. } => {
-                write!(f, "Mermaid渲染错误 ({:?}): {}", error_type, message)
+                write!(f, "Mermaid render error ({:?}): {}", error_type, message)
             }
         }
     }
 }
 
 impl std::error::Error for MermaidValidationError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::utils::extract_mermaid_blocks;
+    use std::fs;
+
+    #[test]
+    fn invalid_then_valid_in_sequence() {
+        let validator = MermaidValidator::with_config(Some(30)).expect("validator init");
+        let invalid = "grph TB\na-->b";
+        let valid = "graph TB\na-->b";
+
+        let err = validator.validate(invalid).expect_err("invalid diagram");
+        assert!(
+            !err.to_string().contains("underlying connection is closed"),
+            "unexpected connection error after invalid diagram: {err}"
+        );
+
+        validator.validate(valid).expect("valid diagram after invalid");
+    }
+
+    #[test]
+    fn architecture_blocks_do_not_cascade_connection_errors() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../docs/en/2.Architecture.md"
+        );
+        let content = fs::read_to_string(path).expect("architecture doc");
+        let blocks = extract_mermaid_blocks(&content);
+        assert!(!blocks.is_empty(), "expected mermaid blocks in architecture doc");
+
+        let validator = MermaidValidator::with_config(Some(30)).expect("validator init");
+
+        for (index, (_, _, code)) in blocks.iter().enumerate() {
+            let result = validator.validate(code);
+            if let Err(err) = &result {
+                let msg = err.to_string();
+                assert!(
+                    !msg.contains("underlying connection is closed"),
+                    "block {} cascaded connection error: {msg}",
+                    index + 1
+                );
+            }
+        }
+    }
+}

@@ -110,17 +110,11 @@ impl CachePerformanceMonitor {
             Ordering::Relaxed,
         );
 
-        // Use localized message for cache hit with detailed statistics
-        let msg = match &self.target_language {
-            TargetLanguage::Chinese => format!(
-                "   💰 缓存命中 [{}] - 节省推理时间: {:.2}秒, 节省tokens: {}输入+{}输出, 估算节省成本: ${:.4}",
-                category, inference_time_saved.as_secs_f64(), token_usage.input_tokens, token_usage.output_tokens, estimated_cost_saved
-            ),
-            _ => format!(
-                "   💰 Cache hit [{}] - Time saved: {:.2}s, Tokens saved: {} input + {} output, Cost saved: ${:.4}",
-                category, inference_time_saved.as_secs_f64(), token_usage.input_tokens, token_usage.output_tokens, estimated_cost_saved
-            ),
-        };
+        // Use English message for cache hit with detailed statistics
+        let msg = format!(
+            "   💰 Cache hit [{}] - Time saved: {:.2}s, Tokens saved: {} input + {} output, Cost saved: ${:.4}",
+            category, inference_time_saved.as_secs_f64(), token_usage.input_tokens, token_usage.output_tokens, estimated_cost_saved
+        );
         println!("{}", msg);
     }
 

@@ -136,6 +136,9 @@ impl MermaidProcessor {
 
                     if !dry_run {
                         if let Some(ai_fixer) = &self.ai_fixer {
+                            // Release Chrome before the LLM call; headless_chrome closes idle
+                            // connections (~30s) while Ollama is generating a fix.
+                            self.validator.reset_connection();
                             match ai_fixer.fix_mermaid(mermaid_code).await {
                                 Ok(fixed_code) => match self.validator.validate(&fixed_code) {
                                     Ok(_) => {
