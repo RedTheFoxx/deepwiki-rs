@@ -1,4 +1,5 @@
 pub mod ai_fixer;
+pub mod browser;
 pub mod markdown_scanner;
 pub mod mermaid_validator;
 pub mod processor;

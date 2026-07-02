@@ -1,4 +1,4 @@
-use mermaid_rs::Mermaid;
+use crate::browser::MermaidRenderer;
 use std::thread;
 use std::time::Duration;
 
@@ -40,7 +40,7 @@ impl MermaidValidator {
         let mut last_error = String::new();
 
         for attempt in 0..max_attempts {
-            let mermaid = match Mermaid::new() {
+            let mermaid = match MermaidRenderer::new() {
                 Ok(mermaid) => mermaid,
                 Err(e) => {
                     last_error = e.to_string();
